@@ -1,0 +1,243 @@
+---
+title: "Using R Data Project (EU2014, Group 2)"
+author: Carmen van Alebeek, Francesca Lionetti, Yilan Wang, Ting Zhang
+date: "02-02-2023"
+output:
+  word_document: default
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Data description
+
+This complex dataset contains data collected during the 2014 EU Election Campaign Study, and consists of two data tables: a four-wave panel survey (**All waves GENERAL.csv**) and a media content analysis (**Dataset MCA EPE 2014 NL FINAL.csv**).
+
+The panel study consists of Dutch participants, who were interviewed prior to the May 2014 elections for the European Parliament and immediately after the elections. The questionnaire includes the participants' demographics (gender, age, education, region, national identity, ethnic groups, religion, income), personality traits, media exposure, political opinions (e.g., party choices, emotions over political issues, interests in political topics, political attitudes, satisfaction, and interests of this campaign).
+
+The original campaign study consists of three four-wave panels - the youth panel, the general panel and the experiment panel. This dataset only consists of the general public panel.
+
+For the general panel, the survey waves were fielded during the following time periods:
+
+* Wave 1: December 13, 2013 – December 26, 2013
+* Wave 2: March 20, 2014 – March 30, 2014
+* Wave 3: April 17, 2014 – April 28, 2014
+* Wave 4: May 26, 2014  – June 2, 2014.
+
+The media content analysis consists of coded media items from Dutch newspapers and television programmes, which were all published or broadcasted between 2 December 2013 and 22 May 2014.
+
+
+## Tidying the data
+```{r libraries, include=FALSE}
+# Loading packages
+library(tidyverse)
+library(lubridate)
+```
+
+```{r, include=FALSE}
+# Then, we can import the data tables
+EU2014_panel <- read_csv("./All waves GENERAL.csv")
+
+EU2014_mediacont <- read_csv("./Dataset MCA EPE 2014 NL FINAL.csv")
+```
+
+Before we can work with the data, it is important to tidy it in accordance with the four principles of tidy data. Below we show how each of these principles relates to our complex dataset and how we fix the problems of untidy data.
+
+
+**1. Each type of case must have its own table**
+
+We are dealing with two different data sources: a longitudinal panel survey and a media content analysis, so we first make sure to create separate data tables for each type of case. For the panel data, we create two data tables: one for the fixed characteristics of respondents, and one for respondent-wave combinations.
+
+First, we create a data table for respondents, which includes fixed respondent characteristics. This table will include the following variables: interview ID (`INTNR`), respondent ID (`RESPNR`), sample (`SAMPLE`), sex (`GSL`), age (`LFT`), level of education (`w1_q61`), area of residence (`NIELSENCBS`), household size (`GEZINSGROOTTE`), vote choice in the 2012 Dutch Parliamentary Elections (`POL2012`), income (`w1_q65`), employment status (`w1_q67`), religious denomination (`w1_q59`), and belonging to an ethnic minority (`w1_q68`).
+
+To do this, we first need to find the primary key, which uniquely identifies each case in the data. Since we know that individuals are the type of case here, the respondent ID variable `RESPNR` is likely to be the primary key. We check whether this is indeed the case with the following procedure:
+
+
+```{r}
+# We suspect that `RESPNR' forms the primary key of the panel data. Here we confirm that this is the case:
+EU2014_panel %>%
+  group_by(RESPNR) %>%
+  mutate(n_identical = n()) %>%
+  filter(n_identical > 1) %>%
+  arrange(RESPNR) %>%
+  ungroup() %>%
+  slice(1:2) # The variable RESPNR is unique for each respondent
+
+# We confirm that the fixed characteristics have only one value per respondent ID
+EU2014_panel %>%
+  group_by(RESPNR) %>%
+  summarise(n_distinct = n_distinct(INTNR, SAMPLE, WAVES, GSL, LFT, w1_q61, NIELSENCBS, GEZINSGROOTTE, POL2012, w1_q65, w1_q68, w1_q67, w1_q59), .groups = "drop") %>%
+  count(n_distinct) # All of these variables only have one distinct value per respondent
+
+# We can proceed with the creation of the data table for the fixed respondent characteristics:
+respondents <- EU2014_panel %>%
+  dplyr::select(RESPNR, INTNR, SAMPLE, WAVES, GSL, LFT, w1_q61, NIELSENCBS, GEZINSGROOTTE, POL2012, w1_q65, w1_q68, w1_q67, w1_q59) %>%
+  distinct() %>%
+  rename(INCOME = w1_q65,
+		 MINORITY = w1_q68,
+		 EMPLOYMENT = w1_q67,
+		 RELIGION = w1_q59,
+		 EDU = w1_q61)
+```
+
+Next, we create a table for respondent per wave, which contains the variables on which respondents' values differ across waves:
+
+```{r}
+# Creating the table for respondent per wave
+respondent_wave <- EU2014_panel %>%
+ 
+# Selecting the relevant variables
+dplyr::select(RESPNR, w1_q3_1:w1_q3_6, w1_q18:w1_q22, w1_q26_1:w1_q28, w1_q34, w1_q49_1:w1_q50_10, w2_q3_1:w2_q3_6, w2_q22_1:w2_q24, w2_q44_1:w2_q45_10, w3_q3_1:w3_q3_6, w3_q28_1:w3_q30, w3_q42:w3_q44_10,w4_q3_1:w4_q3_6,w4_q6, w4_q7, w4_q31_1:w4_q33, w4_q47_1:w4_q48_10)
+```
+
+For the media content data, identifying the primary key is more complicated. We know that media items form the type of case, but the original data do not include a single variable that uniquely identifies each media item. Therefore, we suspect that the primary key consists of a broad range of variables: the coder ID (`V1`), the story identification number (`V2`), publication day (`V3a`), country (`V5`), newspaper-only variables (`NP2`, `NP4`), television-only variable (`TV1`), and the major topic of the story (`V6_cleaned`).
+
+
+```{r}
+#This primary key produces no duplicates
+EU2014_mediacont %>%
+  count(V1,V2,V3a,V5,V6,NP4,TV1,NP2) %>%
+  filter(n>1)
+
+# Results show no duplicates, the primary key of this data set is: V1,V2,V3a,V5,NP2,NP4,TV1,V6_cleaned
+EU2014_mediacont %>%
+  group_by(V1,V2,V3a,V5,NP2,NP4,TV1,V6_cleaned) %>%
+  mutate(n_identical = n()) %>%
+  filter(n_identical > 1) %>%
+  arrange(V1,V2,V3a,V5,NP2,NP4,TV1,V6_cleaned)%>%
+  ungroup() %>%
+  slice(1:2)
+
+# As mentioned above for the EU2014_panel table, we confirm that the fixed characteristics of the media items have one single value for the primary key
+EU2014_mediacont %>%
+  group_by(V1,V2,V3a,V5,NP2,NP4,TV1,V6_cleaned) %>%
+  summarise(n_distinct = n_distinct(V1,V2,V3a,V5,NP2,NP4,TV1,V6_cleaned), .groups = "drop") %>%
+  count(n_distinct)
+```
+
+However, some variables in this primary key, such as `NP2` (i.e., "Is the article part of the randomly chosen page of the newspaper?"), do not bear any substantive meaning as a unique identifier of media items. Thus, this primary key for this dataset is not helpful in terms of uniquely identifying types of cases. Instead, we will create one column of row number as the identifier of each media item. To be able to join the media content analysis data and panel data, we aggregate the media content data on the level of media outlet per wave:
+
+```{r}
+# First, we narrow down the media content data to the cases and variables that we need for our visualizations
+media <- EU2014_mediacont %>%
+dplyr::select(V3a:V4,V5,V9,V11:V13,V15_a_cleaned:V15_f_cleaned,V16a:V16f,NL33,NL41a:NL41f) %>%
+# Then, we remove Belgian media outlets from our data table, because they are not included in the panel data
+filter(!V4 %in% c("21":"23"))
+```
+
+We excluded rows with values "21" and "23" from the data, because they identify Belgium newspapers, which we are not interested in as the General Waves Dataset is only about the Netherlands. Next, we need to create a variable that indicates during which survey wave the media items were coded. To do this, we first need to make a date variable out of the three separate variables that individually represent the day, month and year of publication of each media item. Although this procedure is also a good example of tidy principle 3 (i.e., each variable must have its own column), we will demonstrate it here because it is a necessary next step to proceed with the creation of the tidy media content data table.
+
+```{r}
+media <- media %>%
+ mutate(No. = row_number(),#Creating number for each media item
+         V3c = V3c + 2000,# Creating date column
+     date = make_date(V3c, V3b, V3a)) %>%
+  dplyr::select(-V3a, -V3b, -V3c) %>%
+  dplyr::select(date, everything()) %>%
+# Creating wave column
+  arrange(date) %>%
+  mutate(wave = case_when(date <= as.Date("2013-12-26") ~ as.character("w1"), date >= as.Date("2013-12-27") & date <= as.Date("2014-03-30") ~ as.character("w2"), date >= as.Date("2014-03-31") & date <= as.Date("2014-04-28") ~ as.character("w3"),  date >= as.Date("2014-04-29") & date <= as.Date("2014-06-02") ~ as.character("w4"), TRUE ~ NA_character_)) %>%
+  dplyr::select(No., date, wave, everything())
+```
+
+
+**2. Each observation must have its own row**
+The second principle suggests that each respondent per wave combination must have its own row. In the current respondent data table, however, the wave numbers, question numbers, and item numbers are gathered in their own column rather than in the rows. Below, we show how we pivot the respondent table so that each respondent per wave per question per item has its own row.
+
+```{r, warning=FALSE}
+# Respondent table
+respondent_wave <- respondent_wave %>%
+  rename_at(vars(w1_q18, w1_q19, w1_q20, w1_q21, w1_q22, w1_q28, w1_q34, w2_q24, w3_q30, w4_q7, w4_q33), funs(str_c(., "_1"))) %>% #make all column names have the same structure(wave_Q_item)
+gather(key = "collected",
+value = "rating", -RESPNR) %>%
+  separate(collected,into = c("wave","Q","item"), sep = "_") %>%
+  arrange(RESPNR)
+
+# Data table now has one row per person, per wave, per question, per item
+respondent_wave %>%
+  group_by(RESPNR,wave,Q,item) %>%
+  count() %>%
+  filter(n>1)
+```
+
+**3. Each variable must have its own column**
+Now each respondent per wave per question per item has its own row. However, all variables were spread over multiple rows now instead of having its own column, which makes data wrangling difficult. Next we will demonstrate how to pivot the variables to make them have columns.
+```{r}
+# Recode the values in the column ‘Q’ to identify different sets of variables based on the wave number and the question number
+# For example, Wave 1 Question 18 means the first item of political knowledge
+# We assign each set of variables to a distinct name so that it can be pivoted to the column later
+
+respondent_wave_2 <- respondent_wave %>% 
+  mutate(Q = if_else(Q == "q3", "topic_interest", Q),
+         Q = if_else(wave == "w1" & Q == "q18", "pol_know_1", Q),
+         Q = if_else(wave == "w1" & Q == "q19", "pol_know_2", Q),
+         Q = if_else(wave == "w1" & Q == "q20", "pol_know_3", Q),
+         Q = if_else(wave == "w1" & Q == "q21", "pol_know_4", Q),
+         Q = if_else(wave == "w1" & Q == "q22", "pol_know_5", Q),
+         Q = if_else(wave == "w3" & Q == "q42", "EU_pol_position", Q),
+         Q = if_else(wave == "w4" & Q == "q6", "EU_turnout", Q),
+         Q = if_else(wave == "w4" & Q == "q7", "EU_vote", Q),
+         Q = if_else(wave == "w1" & Q == "q34", "EU_vote_intention", Q),
+         Q = if_else((wave == "w1" & Q == "q26") | (wave == "w2" & Q == "q22") | (wave == "w3" & Q == "q28") | (wave == "w4" & Q == "q31"), "EU_attitude_1", Q),
+         Q = if_else((wave == "w1" & Q == "q27") | (wave == "w2" & Q == "q23") | (wave == "w3" & Q == "q29") | (wave == "w4" & Q == "q32"), "EU_attitude_2", Q),
+         Q = if_else((wave == "w1" & Q == "q28") | (wave == "w2" & Q == "q24") | (wave == "w3" & Q == "q30") | (wave == "w4" & Q == "q33"), "EU_bailout_attitude", Q),
+         Q = if_else((wave == "w1" & Q == "q49" ) | (wave == "w2" & Q == "q44" ) | (wave == "w3" & Q == "q43" ) | (wave == "w4" & Q == "q47"), "TV", Q),
+         Q = if_else((wave == "w1" & Q == "q50" ) | (wave == "w2" & Q == "q45" ) | (wave == "w3" & Q == "q44") | (wave == "w4" & Q == "q48"), "NP", Q))
+
+```
+
+
+```{r}
+# Make every different variables (e.g., political knowledge, EU attitudes…) into different columns:
+respondent_wave_final <- respondent_wave_2 %>%
+  pivot_wider(names_from = Q,values_from = rating) %>%
+  #transform the TV and NP into a new "V4" variable which will be the elements of foreign key when joining with media content table
+  mutate(TV_item = case_when(item == "1" ~ "RTL Nieuws",
+                             item == "2" ~ "NOS Journaal"),
+         NP_item = case_when(item == "1" ~ "de Telegraaf",
+                             item == "2" ~ "NRC Handelsblad",
+                             item == "6" ~ "de Volkskrant")) %>%
+pivot_longer(col = c(TV_item, NP_item), names_to = "media_type", values_to = "V4")
+```
+
+For the media content table, we also tidy it using principle 2.
+```{r}
+media_actor <- media %>% 
+  rename_at(vars(starts_with("V15")), ~ sub("_cleaned$", "", .)) %>% 
+  rename_at(vars(starts_with("V16")), ~ sub("(V16)([a-f])", "\\1_\\2", .)) %>%
+  #create one row for per actor and per evaluation
+  pivot_longer(cols = V15_a:V16_f, names_sep = "_", names_to = c("q","actor"), values_drop_na = TRUE) %>% 
+  pivot_wider(names_from =q, values_from = value, names_repair = "check_unique") %>%
+  group_by(No., wave, actor, V15, V16) %>%
+  select(No., wave, actor, V15, V16)
+
+media_predict <- media %>%
+  rename_at(vars(starts_with("NL41")), ~ sub("(NL41)([a-f])", "\\1_\\2", .)) %>%
+  pivot_longer(col = NL41_a:NL41_f, names_sep = "_", names_to = c("q","party"), values_to = "prediction", values_drop_na = TRUE) %>% #create one row for per party, per prediction
+  group_by(No., wave, party, prediction) %>%
+  select(No., wave, party, prediction)
+
+#join with the original case
+media_long <- media %>% select(No.:V13) %>% 
+  left_join(media_actor, by = c("No.", "wave")) %>% 
+  left_join(media_predict, by = c("No.", "wave"))
+```
+**table join**
+```{R}
+media_group <- media_long %>%
+  group_by(No.,wave, V4, V11, V12,V13, V15,V16, party, prediction) %>%
+  unique()  #before joining only retain the unique case of media content table 
+
+#before joining, confirm the foreign keys of the respondent table have a matches in media content table
+respondent_wave_final %>% group_by(wave, V4) %>%
+  unique() %>% anti_join(media_group, by = c("wave", "V4")) %>% count(V4) %>% filter (n>1)
+#Since "V4" in respondent table is created by TV items and NP items of respondent table, it naturally contains items which was not existed in the media table. The "NA" in V4 of respondent table represents media items which was not analysed in media table.
+
+#Join two table by foreign keys (wave number and media item names)
+#The type of relation between these two table is many-to-many.In each table, each media item in per wave have different rows for other variables
+media_joined <- respondent_wave_final %>% 
+  left_join(media_group, by = c("V4","wave")) 
+```
