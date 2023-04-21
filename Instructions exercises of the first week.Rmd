@@ -1,0 +1,96 @@
+---
+title: "Problem Set Week 1"
+author: "your name"
+date: "enter date"
+output:
+  pdf_document: default
+  word_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Directions for the student
+
+- Put all R code in code chunks and verbal answers outside code chunks.
+- If you get a piece of R code to work, set the code chunk option eval=FALSE to ensure the document can still be knitted.
+- Use tidyverse functions whenever possible.
+- Comment your code to communicate your intentions.
+- Ensure that the R Markdown document knits without problems into a PDF or Word document.
+- Submit the R Markdown document on Canvas (under Assignments) before the deadline.
+
+```{r libraries}
+#Load all libraries in this code chunk.
+```
+
+## Data
+
+**applications.csv**. Admission or rejection (variable *admit*: 1 = Admitted, 0 = Rejected) of applicants to different departments (variable *dept*) of a graduate school with applicant's sex (variable *gender*) and application date (variable *date*).
+
+## Questions
+
+1. Import the data in R with `readr::` and determine the overall admission rate (proportion of admitted applicants) using R code.
+
+```{r}
+#Add your R code for answering this question here.
+```
+
+Grading | Max points  | Awarded  | 
+------- | ----------  |  ------  | -------
+Ex. 1   | 1           |          | 
+
+2. Use `ggplot2::` to create a figure showing the relation between department and gender; set all colors to blue. Which departments are relatively popular among male applicants in comparison to female applicants?
+
+```{r}
+#Add your R code for answering this question here.
+```
+
+Grading | Max points  | Awarded  | 
+------- | ----------  |  ------  | -------
+Ex. 2   | 1           |          | 
+
+3. With `dplyr::` calculate the admission rate for each department for female applicants and for male applicants.
+
+```{r}
+#Add your R code for answering this question here.
+```
+
+Grading | Max points  | Awarded  | 
+------- | ----------  |  ------  | -------
+Ex. 3   | 1           |          | 
+
+4. Display your answer to Question 3 as a bar chart which makes it easy to compare female and male applicants within each department. Is the admission rate always higher for females or for males? 
+
+```{r}
+#Add your R code for answering this question here.
+```
+
+Grading | Max points  | Awarded  | 
+------- | ----------  |  ------  | -------
+Ex. 4   | 2           |          | 
+
+5. For each department, calculate the cumulative mean of admissions (variable *admit*) over time. Show the first 8 results for Department B. What do the cumulative mean scores mean here?
+
+```{r}
+#Add your R code for answering this question here.
+```
+
+Grading | Max points  | Awarded  | 
+------- | ----------  |  ------  | -------
+Ex. 5   | 2           |          | 
+
+6. Create a plot to explore the covariation (association) between a continuous variable and a categorical variable in *your project's data set* that are of interest to you. Use comments in the R code to justify the choices that you made to create this plot.
+
+Note: You may use grouped summaries (aggregation) to create continuous variables or group continuous variables to obtain a categorical variable.
+
+```{r}
+#Add your R code for answering this question here.
+```
+
+Grading | Max points  | Awarded  | 
+------- | ----------  |  ------  | -------
+Ex. 6   | 2           |          | 
+Flawless knitting | 1 |          | 
+**Total**   | 10      |          | 
