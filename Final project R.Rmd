@@ -1,0 +1,243 @@
+---
+title: "Untitled"
+author: "Francesca Lionetti"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+library(tidyverse)
+library(lubridate)
+EU2014_mediacont<-read_csv("C:/Users/franc/OneDrive/Documents/uVa Master/using R/Dataset MCA EPE 2014 NL FINAL.csv")
+EU2014_panel<-read_csv("C:/Users/franc/OneDrive/Documents/uVa Master/using R/All Waves GENERAL.csv")
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+EU2014_panel %>%
+  group_by(RESPNR) %>%
+  mutate(n_identical = n()) %>%
+  filter(n_identical > 1) %>%
+  arrange(RESPNR) %>%
+  ungroup() %>%
+  slice(1:2) # The variable RESPNR is unique for each respondent
+
+# We confirm that the fixed characteristics have only one value per respondent ID
+EU2014_panel %>%
+  group_by(RESPNR) %>%
+  summarise(n_distinct = n_distinct(INTNR, SAMPLE, WAVES, GSL, LFT, w1_q61, NIELSENCBS, GEZINSGROOTTE, POL2012, w1_q65, w1_q68, w1_q67, w1_q59), .groups = "drop") %>%
+  count(n_distinct) # All of these variables only have one distinct value per respondent
+
+# We can proceed with the creation of the data table for the fixed respondent characteristics:
+respondents <- EU2014_panel %>%
+  dplyr::select(RESPNR, INTNR, SAMPLE, WAVES, GSL, LFT, w1_q61, NIELSENCBS, GEZINSGROOTTE, POL2012, w1_q65, w1_q68, w1_q67, w1_q59) %>%
+  distinct() %>%
+  rename(INCOME = w1_q65,
+		 MINORITY = w1_q68,
+		 EMPLOYMENT = w1_q67,
+		 RELIGION = w1_q59,
+		 EDU = w1_q61)
+
+respondent_wave <- EU2014_panel %>%
+ 
+# Selecting the relevant variables
+dplyr::select(RESPNR, w1_q3_1:w1_q3_6, w1_q18:w1_q22, w1_q26_1:w1_q28, w1_q34, w1_q49_1:w1_q50_10, w2_q3_1:w2_q3_6, w2_q22_1:w2_q24, w2_q44_1:w2_q45_10, w3_q3_1:w3_q3_6, w3_q28_1:w3_q30, w3_q42:w3_q44_10,w4_q3_1:w4_q3_6,w4_q6, w4_q7, w4_q31_1:w4_q33, w4_q47_1:w4_q48_10)
+
+EU2014_mediacont %>%
+  count(V1,V2,V3a,V5,V6,NP4,TV1,NP2) %>%
+  filter(n>1)
+
+# Results show no duplicates, the primary key of this data set is: V1,V2,V3a,V5,NP2,NP4,TV1,V6_cleaned
+EU2014_mediacont %>%
+  group_by(V1,V2,V3a,V5,NP2,NP4,TV1,V6_cleaned) %>%
+  mutate(n_identical = n()) %>%
+  filter(n_identical > 1) %>%
+  arrange(V1,V2,V3a,V5,NP2,NP4,TV1,V6_cleaned)%>%
+  ungroup() %>%
+  slice(1:2)
+
+# As mentioned above for the EU2014_panel table, we confirm that the fixed characteristics of the media items have one single value for the primary key
+EU2014_mediacont %>%
+  group_by(V1,V2,V3a,V5,NP2,NP4,TV1,V6_cleaned) %>%
+  summarise(n_distinct = n_distinct(V1,V2,V3a,V5,NP2,NP4,TV1,V6_cleaned), .groups = "drop") %>%
+  count(n_distinct)
+
+media <- EU2014_mediacont %>%
+dplyr::select(V3a:V4,V5,V9,V11:V13,V15_a_cleaned:V15_f_cleaned,V16a:V16f,NL33,NL41a:NL42b_SP_f) %>%
+# Then, we remove Belgian media outlets from our data table, because they are not included in the panel data
+filter(!V4 %in% c("21":"23"))
+
+media <- media %>%
+ mutate(No. = row_number(),#Creating number for each media item
+         V3c = V3c + 2000,# Creating date column
+     date = make_date(V3c, V3b, V3a)) %>%
+  dplyr::select(-V3a, -V3b, -V3c) %>%
+  dplyr::select(date, everything()) %>%
+# Creating wave column
+  arrange(date) %>%
+  mutate(wave = case_when(date <= as.Date("2013-12-26") ~ as.character("w1"), date >= as.Date("2013-12-27") & date <= as.Date("2014-03-30") ~ as.character("w2"), date >= as.Date("2014-03-31") & date <= as.Date("2014-04-28") ~ as.character("w3"),  date >= as.Date("2014-04-29") & date <= as.Date("2014-06-02") ~ as.character("w4"), TRUE ~ NA_character_)) %>%
+  dplyr::select(No., date, wave, everything())
+
+respondent_wave <- respondent_wave %>%
+  rename_at(vars(w1_q18, w1_q19, w1_q20, w1_q21, w1_q22, w1_q28, w1_q34, w2_q24, w3_q30, w4_q7, w4_q33), funs(str_c(., "_1"))) %>%
+gather(key = "collected",
+value = "rating", -RESPNR) %>%
+  separate(collected,into = c("wave","Q","item"), sep = "_") %>%
+  arrange(RESPNR)
+
+# Data table now has one row per person, per wave, per question, per item
+respondent_wave %>%
+  group_by(RESPNR,wave,Q,item) %>%
+  count() %>%
+  filter(n>1)
+
+respondent_wave_2 <- respondent_wave %>% 
+  mutate(Q = if_else(Q == "q3", "topic_interest", Q),
+         Q = if_else(wave == "w1" & Q == "q18", "pol_know_1", Q),
+         Q = if_else(wave == "w1" & Q == "q19", "pol_know_2", Q),
+         Q = if_else(wave == "w1" & Q == "q20", "pol_know_3", Q),
+         Q = if_else(wave == "w1" & Q == "q21", "pol_know_4", Q),
+         Q = if_else(wave == "w1" & Q == "q22", "pol_know_5", Q),
+         Q = if_else(wave == "w3" & Q == "q42", "EU_pol_position", Q),
+         Q = if_else(wave == "w4" & Q == "q6", "EU_turnout", Q),
+         Q = if_else(wave == "w4" & Q == "q7", "EU_vote", Q),
+         Q = if_else(wave == "w1" & Q == "q34", "EU_vote_intention", Q),
+         Q = if_else((wave == "w1" & Q == "q26") | (wave == "w2" & Q == "q22") | (wave == "w3" & Q == "q28") | (wave == "w4" & Q == "q31"), "EU_attitude_1", Q),
+         Q = if_else((wave == "w1" & Q == "q27") | (wave == "w2" & Q == "q23") | (wave == "w3" & Q == "q29") | (wave == "w4" & Q == "q32"), "EU_attitude_2", Q),
+         Q = if_else((wave == "w1" & Q == "q28") | (wave == "w2" & Q == "q24") | (wave == "w3" & Q == "q30") | (wave == "w4" & Q == "q33"), "EU_bailout_attitude", Q),
+         Q = if_else((wave == "w1" & Q == "q49" ) | (wave == "w2" & Q == "q44" ) | (wave == "w3" & Q == "q43" ) | (wave == "w4" & Q == "q47"), "TV", Q),
+         Q = if_else((wave == "w1" & Q == "q50" ) | (wave == "w2" & Q == "q45" ) | (wave == "w3" & Q == "q44") | (wave == "w4" & Q == "q48"), "NP", Q))
+
+respondent_wave_final <- respondent_wave_2 %>%
+  # spread the bfperiod values into new variables
+  pivot_wider(names_from = Q,values_from = rating) %>%
+  mutate(TV_item = case_when(item == "1" ~ "RTL Nieuws",
+                             item == "2" ~ "NOS Journaal"),
+         NP_item = case_when(item == "1" ~ "de Telegraaf",
+                             item == "2" ~ "NRC Handelsblad",
+                             item == "6" ~ "de Volkskrant")) %>%
+pivot_longer(col = c(TV_item, NP_item), names_to = "media_type", values_to = "V4")
+
+media <- media %>%
+separate(col = V9, into = c("V9", "V9_text"), sep = ', ') # Principle 4: separate the column 'V9' to 'V9' (Yes/No) and 'V9_text'(frequency)
+
+media_actor <- media %>% 
+  rename_at(vars(starts_with("V15")), ~ sub("_cleaned$", "", .)) %>%
+  rename_at(vars(starts_with("V16")), ~ sub("(V16)([a-f])", "\\1_\\2", .)) %>%
+  #create one row for per actor and per evaluation
+  pivot_longer(cols = V15_a:V16_f, names_sep = "_", names_to = c("q","actor"), values_drop_na = TRUE) %>% 
+  pivot_wider(names_from =q, values_from = value, names_repair = "check_unique") %>%
+  group_by(No., wave, actor, V15, V16) %>%
+  select(No., wave, actor, V15, V16)
+
+media_predict <- media %>%
+  rename_at(vars(starts_with("NL41")), ~ sub("(NL41)([a-f])", "\\1_\\2", .)) %>%
+  pivot_longer(col = NL41_a:NL41_f, names_sep = "_", names_to = c("q","party"), values_to = "prediction", values_drop_na = TRUE) %>% #create one row for per party, per prediction
+  group_by(No., wave, party, prediction) %>%
+  select(No., wave, party, prediction)
+
+media_long <- media %>% select(No.:V13) %>% 
+  left_join(media_actor, by = c("No.", "wave")) %>% 
+  left_join(media_predict, by = c("No.", "wave"))
+
+media_group <- media_long %>%
+  #filter(str_detect(V15, "party as a whole")) %>%
+  group_by(wave, V4, V11, V12,V13, V15,V16, party, prediction) %>%
+  count()
+
+media_joined <- respondent_wave_final %>% 
+  left_join(media_group, by = c("V4","wave")) 
+```
+
+#### **Individual part: Media exposure and attitudes towards the EU**
+*Research question*: To what extent does newspaper consumption affect the evaluation of the EU?
+
+*Data Journalism Text*: The Russian invasion of Ukraine has reminded us of the importance of the European Institution in promoting peace and protecting human rights. However, attitudes toward the EU fluctuate across the member countries. A survey of Dutch people's attitudes towards the EU reveals that they are not so enthusiastic with the performance of this institution. When analysing newspaper consumption, we can see that people who read NOS Journaal have more negative attitudes towards the EU then those who read De Telegraaf and De Volkskrant. Surprisingly, the amount of newspaper consumption affects substantially attitudes towards the EU only for people who consume De Volkskrant 5 to 7 days a week. 
+
+
+```{r}
+
+#First, I re-name the dataset and I select only the variables I need. I also exclude all NA values from the variables NP and EU_Attitude_1.
+
+Francesca <- media_joined %>%
+  select(RESPNR, wave, NP, V4, EU_attitude_1) %>%
+  filter(NP != is.na(NP))
+
+
+Francesca <- Francesca %>%
+  filter(EU_attitude_1 != is.na(EU_attitude_1))
+
+
+#Now, I recode the EU attitudes variable, so that it is numeric and it only 
+#include numbers (in this way, I can treat it as continuous variables). I 
+#focus on the first subset of questions of the attitudes towards the EU
+
+Francesca <- Francesca %>%
+  mutate(EU_attitude_1 = case_when(EU_attitude_1 == "1 helemaal mee oneens" ~ as.numeric("1"), EU_attitude_1 == "2" ~ as.numeric("2"), EU_attitude_1 == "3" ~ as.numeric("3"), EU_attitude_1 == "4" ~ as.numeric("4"), EU_attitude_1 == "5" ~ as.numeric("5"), EU_attitude_1 == "6" ~ as.numeric("6"), EU_attitude_1 == "7 helemaal mee eens" ~ as.numeric("7")))
+
+
+#For the media outlet variable, I first have to exclude the TV programmes as I do not need them for 
+#my research, Then, I can exclude all NA values.
+
+Francesca <- Francesca %>%
+  mutate(V4 = case_when(V4 == "NOS Journaal" ~ NA_character_, V4 == "RTL Nieuws" ~ NA_character_, V4 == "de Telegraaf" ~ "de Telegraaf", V4 == "NRC Handelsblad" ~ "NRC Handelsblad", V4 == "de Volkskrant" ~ "de Volkskrant"))
+
+Francesca <- Francesca %>%
+  filter(V4 != is.na(V4))
+
+
+#Because, I am interested in media consumption per media outlet, I group the
+#media frequency variable by media outlet 
+
+Francesca <- Francesca %>%
+  group_by(V4) %>%
+  mutate(mediause = NP)
+
+Francesca <- Francesca %>%
+  group_by(V4, mediause) %>%
+  mutate(mean_EU_attitude = round(mean(EU_attitude_1), digits = 2))
+
+#Then, because I am interested in EU attitudes per media consumption and 
+#different media outlet, make a mean of the EU attitudes and I group it by
+#media outlet and media consumption
+
+Francesca <- Francesca %>%
+  group_by(V4, mediause) %>%
+  mutate(mean_EU_attitude = round(mean(EU_attitude_1), digits = 2))
+
+
+#Now, I recode the media consumption variable of newspapers to create three 
+#categories out of it: low (0 to 2 days), medium (3-4 days) and high (5 to 7 
+#days)
+Francesca3 <- Francesca %>%
+  mutate(mediause = case_when(mediause == "0 dagen per week" ~ "low", mediause == "1 dag per week" ~ "low", mediause == "2 dagen per week" ~ "low", mediause == "3 dagen per week" ~ "medium", mediause == "4 dagen per week" ~ "medium", mediause == "5 dagen per week" ~ "high", mediause == "6 dagen per week" ~ "high", mediause == "7 dagen per week" ~ "high"))
+
+Francesca4 <- Francesca3 %>%
+  filter(mediause != is.na(mediause))
+
+
+#Now, I can run the bar chart with ggplot. 
+Francesca4 %>%
+ggplot(aes(x=mediause,y=mean_EU_attitude,group=V4,fill=V4))+
+   geom_col(stat="identity",position="dodge") +
+  scale_fill_manual(name=NULL, 
+                    breaks=c("*low*", "*medium*","*high*")) + scale_fill_brewer(palette="Spectral", name="Media Outlet", labels=c("NOS Journaal", "de Telegraaf", "de Volkskrant")) +
+   theme_minimal() +
+  xlab("Media Use per week") + ylab("Average attitude towards the EU") + ggtitle("The impact of media use on the evaluation of the EU - Netherlands, 2014")
+
+
+
+```
